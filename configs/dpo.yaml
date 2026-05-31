@@ -26,14 +26,18 @@ dpo:
   label_smoothing: 0.0
   reference_free: false
   precompute_ref_log_probs: true   # frees ref model from GPU after first pass
-  # Precompute is forward-only but Qwen3.5's vocab is huge (~248k), so the
-  # lm_head logits tensor dominates memory:
-  #   bytes ≈ batch * max_seq_in_batch * vocab * 2
-  # At batch=32 with a long-tail batch (max prompt+chosen ≈ 1700), logits
-  # alone = ~27 GB, OOMing on top of policy+ref models (~18 GB) and
-  # activations. batch=16 puts logits at ~13.5 GB which fits comfortably.
-  # Bump only after watching nvidia-smi peak during a long-seq batch.
-  precompute_ref_batch_size: 16
+  # Precompute is forward-only but Qwen3.5 has a HUGE vocab (~248k) and DPO
+  # concatenates chosen+rejected per batch (effective 2x batch). The lm_head
+  # logits dominate memory and pad to the longest seq in each batch:
+  #   bytes ≈ (2 * batch) * max_seq_in_batch * vocab * 2
+  # Our data has max prompt+rejected ≈ 3765 (rare long-tail rows), so a
+  # batch that happens to contain one of those needs:
+  #   batch=16: 32 * 3765 * 248044 * 2 ≈ 56 GB  -> OOM
+  #   batch=8 : 16 * 3765 * 248044 * 2 ≈ 28 GB  -> tight, sometimes OOM
+  #   batch=4 :  8 * 3765 * 248044 * 2 ≈ 14 GB  -> safe with margin
+  # batch=4 gives ~4x speedup over batch=1 (≈30 min instead of ~2 h),
+  # which is the right tradeoff against random long-tail OOM crashes.
+  precompute_ref_batch_size: 4
 
 train:
   output_dir: artifacts/dpo
