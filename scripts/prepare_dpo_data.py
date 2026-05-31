@@ -46,7 +46,8 @@ PROMPT_TEMPLATE = (
     "### Response:\n"
 )
 
-KEEP_LABELS = {"minor_edit", "major_edit"}
+KEEP_LABELS_DEFAULT = {"minor_edit", "major_edit"}
+KEEP_LABELS_MAJOR_ONLY = {"major_edit"}
 
 
 def download(dst: Path) -> None:
@@ -59,7 +60,8 @@ def download(dst: Path) -> None:
     print(f"[done] {dst.stat().st_size:,} bytes")
 
 
-def build(src: Path, out_dir: Path, val_ratio: float, seed: int) -> None:
+def build(src: Path, out_dir: Path, val_ratio: float, seed: int,
+          keep_labels: set[str]) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     rows: list[dict] = []
     counts = {"total": 0, "kept": 0}
@@ -79,7 +81,7 @@ def build(src: Path, out_dir: Path, val_ratio: float, seed: int) -> None:
                 drop(f"error_type={r.get('error_type')}")
                 continue
             label = r.get("teacher_label")
-            if label not in KEEP_LABELS:
+            if label not in keep_labels:
                 drop(f"label={label}")
                 continue
             source = (r.get("source") or "").strip()
@@ -114,12 +116,13 @@ def build(src: Path, out_dir: Path, val_ratio: float, seed: int) -> None:
             for row in chunk:
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
-    label_dist = {l: sum(1 for r in rows if r["teacher_label"] == l) for l in KEEP_LABELS}
+    label_dist = {l: sum(1 for r in rows if r["teacher_label"] == l) for l in keep_labels}
     stats = {
         "input_rows": counts["total"],
         "kept_rows": counts["kept"],
         "train_rows": len(train),
         "val_rows": len(val),
+        "kept_labels": sorted(keep_labels),
         "label_distribution": label_dist,
         "drop_reasons": reasons,
         "seed": seed,
@@ -138,6 +141,8 @@ def main() -> None:
     ap.add_argument("--val-ratio", type=float, default=0.01)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--skip-download", action="store_true")
+    ap.add_argument("--major-only", action="store_true",
+                    help="keep only teacher_label=major_edit (drops minor_edit)")
     args = ap.parse_args()
 
     if not args.skip_download:
@@ -145,7 +150,9 @@ def main() -> None:
     if not args.raw.exists():
         print(f"[error] {args.raw} not found", file=sys.stderr)
         sys.exit(1)
-    build(args.raw, args.out, args.val_ratio, args.seed)
+    keep_labels = KEEP_LABELS_MAJOR_ONLY if args.major_only else KEEP_LABELS_DEFAULT
+    print(f"[filter] keep_labels = {sorted(keep_labels)}")
+    build(args.raw, args.out, args.val_ratio, args.seed, keep_labels)
 
 
 if __name__ == "__main__":
