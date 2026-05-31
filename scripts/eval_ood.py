@@ -73,6 +73,11 @@ def vllm_generate(model_path: str, prompts: list[str], *, max_length: int,
 
     print(f"[vllm] loading {model_path} tp={tensor_parallel_size} dtype={dtype} "
           f"max_model_len={max_length}")
+    # language_model_only=True: Qwen 3.5 config declares
+    # `Qwen3_5ForConditionalGeneration` (VLM). Without this flag vLLM tries to
+    # initialize the vision encoder and load an image processor, which doesn't
+    # exist in our text-only SFT/DPO checkpoint (no preprocessor_config.json).
+    # Mirrors scp_stage4_sft_v2/src/scp_stage4/pipeline/workers/vllm_inference_worker.py.
     llm = LLM(
         model=model_path,
         dtype=dtype,
@@ -80,6 +85,7 @@ def vllm_generate(model_path: str, prompts: list[str], *, max_length: int,
         tensor_parallel_size=tensor_parallel_size,
         gpu_memory_utilization=gpu_memory_utilization,
         enforce_eager=False,
+        language_model_only=True,
     )
 
     tok = AutoTokenizer.from_pretrained(model_path)
