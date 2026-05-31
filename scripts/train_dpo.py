@@ -41,6 +41,23 @@ from datasets import load_dataset
 from transformers import set_seed
 from trl import DPOConfig, DPOTrainer
 
+# --- Force text routing in DPOTrainer._prepare_dataset.
+# Unsloth misclassifies Qwen 3.5 (text-only LM) as a VLM
+# (see warning "VLM processor fallback returned None for model_type=qwen3_5"),
+# which makes `self.is_vision_model = True` and routes preprocessing through
+# dpo_trainer_vision_process_row. That path then does
+# `processing_class.tokenizer` and crashes on the transformers 5.x
+# TokenizersBackend (which has no `.tokenizer` attribute).
+# Forcing is_vision_model=False before the dataset map sends both train
+# and eval splits through the correct text `tokenize_row` path.
+_orig_prepare_dataset = DPOTrainer._prepare_dataset
+
+def _prepare_dataset_text_only(self, *args, **kwargs):
+    self.is_vision_model = False
+    return _orig_prepare_dataset(self, *args, **kwargs)
+
+DPOTrainer._prepare_dataset = _prepare_dataset_text_only
+
 
 def _req(d: dict, key: str, ctx: str) -> Any:
     if key not in d:
