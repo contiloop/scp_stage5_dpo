@@ -27,10 +27,14 @@ from typing import Any
 import yaml
 
 # --- Unsloth MUST be imported before transformers/trl for its patches to apply.
-import unsloth  # noqa: F401  (side-effect import: patches transformers / trl)
-from unsloth import FastLanguageModel, PatchDPOTrainer
-
-PatchDPOTrainer()
+# We use FastLanguageModel only for efficient model loading; the trainer itself
+# is vanilla TRL DPOTrainer. PatchDPOTrainer() is deliberately NOT called: its
+# compiled cache (unsloth_compiled_cache/UnslothDPOTrainer.py) misroutes the
+# transformers 5.x TokenizersBackend into the vision processor path and crashes
+# with `TokenizersBackend has no attribute tokenizer`. Full-weight DPO doesn't
+# need the LoRA-oriented PatchDPOTrainer optimizations anyway.
+import unsloth  # noqa: F401  (side-effect import; keep before transformers/trl)
+from unsloth import FastLanguageModel
 
 import torch
 from datasets import load_dataset
