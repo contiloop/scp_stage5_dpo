@@ -2,6 +2,19 @@
 
 Unsloth full-weight DPO on top of the stage4 SFT v2 checkpoint.
 
+## Quickstart (GPU instance, end-to-end)
+
+```bash
+git clone https://github.com/contiloop/scp_stage5_dpo.git && cd scp_stage5_dpo
+make set-real-env && export COMET_PYTHON=$HOME/.venvs/comet/bin/python
+huggingface-cli login && wandb login
+make upload-sft        # SFT ckpt -> alwaysgood/qwen35_sft_023
+make train-dpo         # 학습 + 자동 OOD eval
+make push-dpo          # final -> alwaysgood/qwen35_sft_023_dpo  (인스턴스 내리기 전에!)
+```
+
+See sections below for details, overrides, and standalone steps.
+
 ## Layout
 
 ```
