@@ -26,12 +26,14 @@ dpo:
   label_smoothing: 0.0
   reference_free: false
   precompute_ref_log_probs: true   # frees ref model from GPU after first pass
-  # Precompute is forward-only (no grad, no optimizer state), so memory budget
-  # is much larger than training. Empirically on A100 80GB with our data
-  # (avg ~150 tokens, max ~1700), batch=32 sits around 25-50 GB; batch=8 only
-  # used ~18 GB so there was plenty of room. Drop to 16/8 if OOM hits a long
-  # tail batch, raise to 64 only after watching nvidia-smi.
-  precompute_ref_batch_size: 32
+  # Precompute is forward-only but Qwen3.5's vocab is huge (~248k), so the
+  # lm_head logits tensor dominates memory:
+  #   bytes ≈ batch * max_seq_in_batch * vocab * 2
+  # At batch=32 with a long-tail batch (max prompt+chosen ≈ 1700), logits
+  # alone = ~27 GB, OOMing on top of policy+ref models (~18 GB) and
+  # activations. batch=16 puts logits at ~13.5 GB which fits comfortably.
+  # Bump only after watching nvidia-smi peak during a long-seq batch.
+  precompute_ref_batch_size: 16
 
 train:
   output_dir: artifacts/dpo
