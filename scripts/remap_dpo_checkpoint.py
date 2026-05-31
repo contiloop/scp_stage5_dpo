@@ -39,18 +39,28 @@ from safetensors import safe_open
 from safetensors.torch import save_file
 
 
-WRAP_PREFIX = "model.language_model.language_model.language_model."
-TARGET_PREFIX = "language_model.model."
+# Three rename rules, applied in order (first match wins):
+#   LM (text):
+#     model.language_model.language_model.language_model.X  ->  language_model.model.X
+#   Vision tower (untouched by DPO, but still wrapped once by Unsloth's outer .model):
+#     model.language_model.visual.X                          ->  visual.X
+#   lm_head (rare; usually tied to embed_tokens so absent):
+#     lm_head.X                                              ->  lm_head.X
+RENAME_RULES = (
+    ("model.language_model.language_model.language_model.", "language_model.model."),
+    ("model.language_model.visual.",                        "visual."),
+    ("lm_head.",                                            "lm_head."),
+)
 
 
 def remap_keys(keys: list[str]) -> tuple[dict[str, str], list[str]]:
     mapping: dict[str, str] = {}
     bad: list[str] = []
     for k in keys:
-        if k.startswith(WRAP_PREFIX):
-            mapping[k] = TARGET_PREFIX + k[len(WRAP_PREFIX):]
-        elif k == "lm_head.weight" or k.startswith("lm_head."):
-            mapping[k] = k
+        for src, dst in RENAME_RULES:
+            if k.startswith(src):
+                mapping[k] = dst + k[len(src):]
+                break
         else:
             bad.append(k)
     return mapping, bad
