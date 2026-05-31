@@ -231,14 +231,23 @@ def main() -> None:
     cache_meta = cache_dir / "meta.json"
 
     used_cache = False
+    need_cols = {"reference_chosen_logps", "reference_rejected_logps"}
     if cache_train.exists() and cache_eval.exists() and cache_meta.exists():
         from datasets import load_from_disk
-        print(f"[precompute] cache HIT at {cache_dir}")
-        print(f"[precompute] loading augmented datasets (includes ref logps)")
-        train_ds = load_from_disk(str(cache_train))
-        eval_ds = load_from_disk(str(cache_eval))
-        used_cache = True
-    else:
+        candidate_train = load_from_disk(str(cache_train))
+        candidate_eval = load_from_disk(str(cache_eval))
+        missing = need_cols - set(candidate_train.column_names)
+        if missing:
+            # Cache was written by buggy older code that ran before TRL's
+            # lazy precompute fired. Treat as MISS and recompute.
+            print(f"[precompute] cache present at {cache_dir} but missing "
+                  f"{missing} — invalidating and recomputing")
+        else:
+            print(f"[precompute] cache HIT at {cache_dir}")
+            train_ds = candidate_train
+            eval_ds = candidate_eval
+            used_cache = True
+    if not used_cache:
         print(f"[precompute] cache MISS at {cache_dir} — will precompute "
               f"and save (~2h on A100 80GB for 20k pairs)")
 

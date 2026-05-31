@@ -35,7 +35,12 @@ train:
   warmup_ratio: 0.03
   lr_scheduler_type: cosine
   optim: adamw_torch
-  max_grad_norm: 1.0
+  # 1st run had max_grad_norm=1.0 with raw grad ~16, so clip fired every step
+  # and effective lr collapsed to ~5e-8. For run 2 we disable clipping
+  # (1e9 is "off" — HF TrainingArguments doesn't accept None for this field).
+  # Implication: effective update step jumps ~16x at the current raw-grad
+  # magnitude. If chosen logp starts collapsing in wandb, dial back lr.
+  max_grad_norm: 1.0e9
   # effective batch = per_device_train_batch_size * grad_accum * num_gpus
   # target = 128.   single A100 80GB:  1 * 128 * 1 = 128
   per_device_train_batch_size: 1
