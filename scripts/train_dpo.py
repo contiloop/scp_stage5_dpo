@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -199,6 +200,42 @@ def main() -> None:
     train_ds, eval_ds = load_dpo_dataset(cfg["data"])
     dpo_args = build_dpo_config(cfg)
 
+    # --- Reference log-prob precompute cache.
+    # The precomputed ref logps depend only on (reference model + data + tokenizer);
+    # they are invariant to lr / beta / grad_clip / epochs / etc. Save them after
+    # the first run and reuse on subsequent runs so we don't pay the ~2h precompute
+    # cost again for every hyperparameter sweep.
+    #
+    # Cache key: sha1 of (model id, train+eval file paths and their mtime/size).
+    # Change the model or the data file content and you get a cache miss.
+    cache_root = Path(cfg["train"]["output_dir"]) / "precompute_cache"
+    train_path = Path(cfg["data"]["train_path"])
+    eval_path = Path(cfg["data"]["eval_path"])
+    cache_seed = "|".join([
+        str(cfg["model"]["name_or_path"]),
+        f"{train_path}:{train_path.stat().st_size}:{int(train_path.stat().st_mtime)}",
+        f"{eval_path}:{eval_path.stat().st_size}:{int(eval_path.stat().st_mtime)}",
+        f"max_length={cfg['model']['max_length']}",
+        f"max_prompt_length={cfg['model']['max_prompt_length']}",
+    ])
+    cache_key = hashlib.sha1(cache_seed.encode("utf-8")).hexdigest()[:12]
+    cache_dir = cache_root / cache_key
+    cache_train = cache_dir / "train"
+    cache_eval = cache_dir / "eval"
+    cache_meta = cache_dir / "meta.json"
+
+    used_cache = False
+    if cache_train.exists() and cache_eval.exists() and cache_meta.exists():
+        from datasets import load_from_disk
+        print(f"[precompute] cache HIT at {cache_dir}")
+        print(f"[precompute] loading augmented datasets (includes ref logps)")
+        train_ds = load_from_disk(str(cache_train))
+        eval_ds = load_from_disk(str(cache_eval))
+        used_cache = True
+    else:
+        print(f"[precompute] cache MISS at {cache_dir} — will precompute "
+              f"and save (~2h on A100 80GB for 20k pairs)")
+
     trainer = DPOTrainer(
         model=model,
         ref_model=None,                  # DPOTrainer will clone for full FT
@@ -207,6 +244,29 @@ def main() -> None:
         eval_dataset=eval_ds,
         processing_class=tokenizer,
     )
+
+    # If we just computed the ref logps, persist the augmented datasets for reuse.
+    # TRL DPOTrainer.__init__ runs the precompute pass and stores the augmented
+    # dataset on the trainer instance, so by the time we reach here it's ready.
+    if not used_cache:
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            print(f"[precompute] saving augmented datasets -> {cache_dir}")
+            trainer.train_dataset.save_to_disk(str(cache_train))
+            trainer.eval_dataset.save_to_disk(str(cache_eval))
+            cache_meta.write_text(json.dumps({
+                "model": cfg["model"]["name_or_path"],
+                "train_path": str(train_path),
+                "eval_path": str(eval_path),
+                "max_length": cfg["model"]["max_length"],
+                "max_prompt_length": cfg["model"]["max_prompt_length"],
+                "cache_key": cache_key,
+            }, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"[precompute] cache saved; future runs with same "
+                  f"model+data will skip the precompute step")
+        except Exception as exc:
+            # Caching is an optimization, never a correctness requirement.
+            print(f"[precompute][WARN] failed to save cache: {exc}", file=sys.stderr)
 
     print(f"[train] starting DPO  steps_per_epoch~={len(train_ds) // (dpo_args.per_device_train_batch_size * dpo_args.gradient_accumulation_steps)}")
     trainer.train()
