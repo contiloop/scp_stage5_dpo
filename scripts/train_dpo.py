@@ -215,7 +215,27 @@ def main() -> None:
     final_dir.mkdir(parents=True, exist_ok=True)
     trainer.save_model(str(final_dir))
     tokenizer.save_pretrained(str(final_dir))
-    print(f"[done] saved to {final_dir}")
+    print(f"[save] raw checkpoint -> {final_dir}")
+
+    # Unsloth + TRL DPOTrainer wrap the Qwen3.5 LM three deep
+    # (model.language_model.language_model.language_model.X) and leave the
+    # vision tower wrapped once (model.language_model.visual.X). vLLM's
+    # Qwen3_5ForConditionalGeneration loader needs
+    # language_model.model.X and visual.X. Rewrite the safetensors file
+    # in place right after save so downstream tools (vLLM, hub upload)
+    # see a clean checkpoint and no separate remap step is needed.
+    sys.path.insert(0, str(Path(__file__).parent))
+    from remap_dpo_checkpoint import remap_inplace  # noqa: E402
+    try:
+        remap_inplace(final_dir)
+        print(f"[done] saved + remapped to {final_dir}")
+    except Exception as exc:
+        # Don't lose the run: the raw checkpoint is still on disk and
+        # scripts/remap_dpo_checkpoint.py can repair it manually.
+        print(f"[remap][WARN] in-place remap failed: {exc}", file=sys.stderr)
+        print(f"[remap][WARN] raw checkpoint preserved at {final_dir}; "
+              f"recover with: python scripts/remap_dpo_checkpoint.py "
+              f"--src {final_dir} --dst {final_dir}_vllm", file=sys.stderr)
 
     # OOD eval after training (spawn fresh process so COMET/policy model don't share state)
     ood_cfg = cfg.get("eval_ood") or {}

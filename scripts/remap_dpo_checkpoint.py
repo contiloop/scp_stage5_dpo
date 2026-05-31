@@ -31,8 +31,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 from safetensors import safe_open
@@ -66,61 +68,83 @@ def remap_keys(keys: list[str]) -> tuple[dict[str, str], list[str]]:
     return mapping, bad
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--src", type=Path, required=True)
-    ap.add_argument("--dst", type=Path, required=True)
-    args = ap.parse_args()
-
-    src_safetensors = args.src / "model.safetensors"
-    if not src_safetensors.exists():
-        # sharded?
-        idx = args.src / "model.safetensors.index.json"
-        if idx.exists():
-            print("[error] sharded safetensors not yet supported", file=sys.stderr)
-        else:
-            print(f"[error] not found: {src_safetensors}", file=sys.stderr)
-        sys.exit(2)
-
-    args.dst.mkdir(parents=True, exist_ok=True)
-
-    with safe_open(str(src_safetensors), framework="pt") as f:
+def _remap_safetensors_file(src: Path, dst: Path) -> dict[str, int]:
+    """Read safetensors at src, remap key names, write to dst. Returns stats."""
+    with safe_open(str(src), framework="pt") as f:
         keys = list(f.keys())
-
-    print(f"[scan] {len(keys)} tensors in {src_safetensors}")
     mapping, bad = remap_keys(keys)
     if bad:
-        print(f"[error] {len(bad)} keys do not match expected wrap pattern:",
-              file=sys.stderr)
-        for k in bad[:20]:
-            print(f"        {k}", file=sys.stderr)
-        sys.exit(3)
-
-    print(f"[map] renaming {len(mapping)} tensors")
-    print(f"[map] sample: {next(iter(mapping.items()))}")
-
-    # Load + remap. Loads the full state dict into memory; for a ~9 GB
-    # text-only Qwen3.5 LM this is fine on a workstation/instance.
+        raise RuntimeError(
+            f"{len(bad)} keys do not match expected wrap pattern; "
+            f"first offenders: {bad[:5]}"
+        )
     new_state: dict = {}
-    with safe_open(str(src_safetensors), framework="pt") as f:
+    with safe_open(str(src), framework="pt") as f:
         for k in keys:
             new_state[mapping[k]] = f.get_tensor(k)
+    save_file(new_state, str(dst), metadata={"format": "pt"})
+    return {"renamed": len(mapping), "src_bytes": src.stat().st_size,
+            "dst_bytes": dst.stat().st_size}
 
-    dst_safetensors = args.dst / "model.safetensors"
-    save_file(new_state, str(dst_safetensors), metadata={"format": "pt"})
-    print(f"[write] {dst_safetensors}  ({dst_safetensors.stat().st_size:,} bytes)")
 
-    # Copy remaining files unchanged
+def remap_directory(src_dir: Path, dst_dir: Path) -> None:
+    """Remap weights in src_dir and write a complete model dir to dst_dir.
+    Copies config / tokenizer files unchanged."""
+    src_safetensors = src_dir / "model.safetensors"
+    if not src_safetensors.exists():
+        idx = src_dir / "model.safetensors.index.json"
+        if idx.exists():
+            raise NotImplementedError("sharded safetensors not yet supported")
+        raise FileNotFoundError(src_safetensors)
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    stats = _remap_safetensors_file(src_safetensors, dst_dir / "model.safetensors")
+    print(f"[remap] {stats['renamed']} tensors  "
+          f"src={stats['src_bytes']:,}b  dst={stats['dst_bytes']:,}b")
     for name in ("config.json", "generation_config.json",
                  "tokenizer.json", "tokenizer_config.json",
                  "special_tokens_map.json", "added_tokens.json",
                  "chat_template.json", "preprocessor_config.json"):
-        p = args.src / name
+        p = src_dir / name
         if p.exists():
-            shutil.copy2(p, args.dst / name)
-            print(f"[copy] {name}")
+            shutil.copy2(p, dst_dir / name)
 
-    print(f"[done] {args.dst}")
+
+def remap_inplace(target_dir: Path) -> None:
+    """Remap weights in target_dir, writing back to the same model.safetensors.
+    Uses a temp file + atomic rename so a crash mid-write doesn't corrupt the
+    original. Other files (config, tokenizer) are untouched."""
+    src = target_dir / "model.safetensors"
+    if not src.exists():
+        idx = target_dir / "model.safetensors.index.json"
+        if idx.exists():
+            raise NotImplementedError("sharded safetensors not yet supported")
+        raise FileNotFoundError(src)
+    with tempfile.NamedTemporaryFile(
+        dir=target_dir, prefix="model.safetensors.", suffix=".tmp", delete=False
+    ) as tmp:
+        tmp_path = Path(tmp.name)
+    try:
+        stats = _remap_safetensors_file(src, tmp_path)
+        os.replace(tmp_path, src)
+        print(f"[remap-inplace] {stats['renamed']} tensors rewritten in {src}")
+    except BaseException:
+        if tmp_path.exists():
+            tmp_path.unlink()
+        raise
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--src", type=Path, required=True)
+    ap.add_argument("--dst", type=Path,
+                    help="if omitted, remap is performed in-place on --src")
+    args = ap.parse_args()
+
+    if args.dst is None:
+        remap_inplace(args.src)
+    else:
+        remap_directory(args.src, args.dst)
+    print(f"[done] {args.dst or args.src}")
 
 
 if __name__ == "__main__":
