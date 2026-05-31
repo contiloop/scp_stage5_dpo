@@ -172,6 +172,7 @@ def build_dpo_config(cfg: dict) -> DPOConfig:
         label_smoothing=float(_req(d, "label_smoothing", "dpo")),
         reference_free=bool(_req(d, "reference_free", "dpo")),
         precompute_ref_log_probs=bool(_req(d, "precompute_ref_log_probs", "dpo")),
+        precompute_ref_batch_size=int(_req(d, "precompute_ref_batch_size", "dpo")),
         max_length=int(_req(m, "max_length", "model")),
         max_prompt_length=int(_req(m, "max_prompt_length", "model")),
         remove_unused_columns=False,
