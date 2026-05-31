@@ -46,8 +46,10 @@ SFT_RUNS_REPO ?= alwaysgood/scp-stage4-sft-v2-runs
 SFT_RUN_ID    ?= sft_v2_c4sel_from014
 SFT_SUBSET    ?= subset_023
 SFT_DEST_REPO ?= alwaysgood/qwen35_sft_023
+DPO_DEST_REPO ?= alwaysgood/qwen35_sft_023_dpo
+DPO_SRC       ?= artifacts/dpo/final
 
-.PHONY: set-real-env verify-cuda-kernels prepare-data upload-sft train-dpo eval-ood
+.PHONY: set-real-env verify-cuda-kernels prepare-data upload-sft train-dpo eval-ood push-dpo
 
 # ==================================================================
 # set-real-env  (mirror of scp_stage4_sft_v2/Makefile::set-real-env)
@@ -170,3 +172,8 @@ train-dpo:
 eval-ood:
 	$(REAL_ENV_PY) scripts/eval_ood.py --config $(CONFIG) \
 		--model artifacts/dpo/final --tag final
+
+push-dpo:
+	$(REAL_ENV_PY) scripts/upload_dpo_checkpoint.py \
+		--src       $(DPO_SRC) \
+		--dest-repo $(DPO_DEST_REPO)

@@ -77,6 +77,19 @@ to only stage locally.)
 python scripts/train_dpo.py --config configs/dpo.yaml
 ```
 
+## 4. Push final DPO checkpoint to HF (manual)
+
+```
+make push-dpo                              # artifacts/dpo/final -> alwaysgood/qwen35_sft_023_dpo
+make push-dpo DPO_SRC=artifacts/dpo/checkpoint-100 DPO_DEST_REPO=alwaysgood/qwen35_sft_023_dpo_s100
+```
+
+The dest repo is created (if missing) and the folder is uploaded
+wholesale. Add `--private` via the underlying script if you want a
+private repo.
+
+## OOD eval notes
+
 OOD eval runs automatically at the end of training (vLLM greedy generation
 on `data/test.csv` → BLEU + chrF in-process, xcomet via `$COMET_PYTHON`
 subprocess). You can also run it standalone:
