@@ -1,0 +1,30 @@
+# Mac
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.env
+
+# Tool caches
+.claude/
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Raw HF dump (131 MB; reproduce with `make prepare-data`)
+data/raw/
+
+# Training artifacts (checkpoints, OOD predictions, etc.)
+artifacts/
+
+# Logs
+*.log
+wandb/
+
+# Editor
+.vscode/
+.idea/

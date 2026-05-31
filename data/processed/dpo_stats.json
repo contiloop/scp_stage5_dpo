@@ -1,0 +1,19 @@
+{
+  "input_rows": 38400,
+  "kept_rows": 20394,
+  "train_rows": 20191,
+  "val_rows": 203,
+  "label_distribution": {
+    "minor_edit": 8505,
+    "major_edit": 11889
+  },
+  "drop_reasons": {
+    "label=rewrite": 15312,
+    "error_type=runtime_error": 203,
+    "label=no_change": 1844,
+    "error_type=filtered": 624,
+    "gold==student": 23
+  },
+  "seed": 42,
+  "val_ratio": 0.01
+}

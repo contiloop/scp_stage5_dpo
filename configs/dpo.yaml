@@ -1,0 +1,85 @@
+# scp stage5 DPO config — mirror of scp_stage4_sft_v2 where applicable.
+# Every value here is consumed explicitly by scripts/train_dpo.py — no fallbacks.
+
+model:
+  # HF model repo holding the SFT checkpoint (uploaded via scripts/upload_sft_checkpoint.py).
+  # Override via --model on the CLI if you switch checkpoints.
+  name_or_path: alwaysgood/qwen35_sft_023
+  # mirrored from scp_stage4_sft_v2/configs/model.yaml
+  max_length: 4096            # full sequence cap (prompt + response)
+  max_prompt_length: 2048     # prompt portion cap (mirrors stage4 max_source_tokens=1700 + headroom)
+  dtype: bf16
+  attention_impl: flash_attention_2
+  padding_side: left
+  trust_remote_code: false
+
+data:
+  train_path: data/processed/dpo_train.jsonl
+  eval_path: data/processed/dpo_val.jsonl
+  prompt_field: prompt
+  chosen_field: chosen
+  rejected_field: rejected
+
+dpo:
+  loss_type: sigmoid          # vanilla DPO
+  beta: 0.1
+  label_smoothing: 0.0
+  reference_free: false
+  precompute_ref_log_probs: true   # frees ref model from GPU after first pass
+
+train:
+  output_dir: artifacts/dpo
+  num_train_epochs: 1
+  learning_rate: 8.0e-7
+  weight_decay: 0.0
+  warmup_ratio: 0.03
+  lr_scheduler_type: cosine
+  optim: adamw_torch
+  max_grad_norm: 1.0
+  # effective batch = per_device_train_batch_size * grad_accum * num_gpus
+  # target = 128.   single A100 80GB:  1 * 128 * 1 = 128
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 128
+  per_device_eval_batch_size: 1
+  gradient_checkpointing: true
+  bf16: true
+  seed: 42
+  logging_steps: 1
+  eval_strategy: steps
+  eval_steps: 25
+  save_strategy: steps
+  save_steps: 50
+  save_total_limit: 3
+  report_to: ["wandb"]
+  run_name: scp_stage5_dpo_qwen35_sft_023
+
+wandb:
+  project: scp-stage5
+  entity: null                # set via env WANDB_ENTITY if needed
+
+eval_ood:
+  enabled: true
+  when: end                   # 'end' = run once after training. (other modes not implemented; explicit fail.)
+  test_csv: data/test.csv
+  source_column: Source_En
+  reference_column: Target_Ko
+  output_dir: artifacts/dpo/ood_eval
+  generation:
+    do_sample: false
+    temperature: 0.0
+    top_p: null
+    max_new_tokens: 2048
+    on_truncation: discard
+  vllm:
+    tensor_parallel_size: 1
+    dtype: bfloat16
+    gpu_memory_utilization: 0.85
+  metrics:                    # all three computed; results logged to wandb
+    - xcomet
+    - BLEU
+    - chrF
+  metric_settings:
+    xcomet:
+      model_name: Unbabel/wmt22-comet-da
+      batch_size: 8
+      gpus: 1

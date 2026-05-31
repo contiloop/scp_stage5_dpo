@@ -1,0 +1,162 @@
+[
+  {
+    "file": "data/processed/dpo_train.jsonl",
+    "rows": 20191,
+    "prompt_tokens": {
+      "n": 20191,
+      "min": 26,
+      "p50": 67,
+      "p90": 132,
+      "p95": 169,
+      "p99": 331,
+      "p99.9": 976,
+      "max": 1718,
+      "mean": 82.5
+    },
+    "chosen_tokens": {
+      "n": 20191,
+      "min": 5,
+      "p50": 54,
+      "p90": 130,
+      "p95": 169,
+      "p99": 339,
+      "p99.9": 968,
+      "max": 1889,
+      "mean": 71.5
+    },
+    "rejected_tokens": {
+      "n": 20191,
+      "min": 2,
+      "p50": 54,
+      "p90": 129,
+      "p95": 169,
+      "p99": 331,
+      "p99.9": 922,
+      "max": 2048,
+      "mean": 71.2
+    },
+    "prompt+chosen": {
+      "n": 20191,
+      "min": 32,
+      "p50": 121,
+      "p90": 262,
+      "p95": 337,
+      "p99": 669,
+      "p99.9": 1881,
+      "max": 3555,
+      "mean": 153.9
+    },
+    "prompt+rejected": {
+      "n": 20191,
+      "min": 28,
+      "p50": 120,
+      "p90": 262,
+      "p95": 337,
+      "p99": 661,
+      "p99.9": 1806,
+      "max": 3765,
+      "mean": 153.6
+    },
+    "budgets": {
+      "max_length": 4096,
+      "max_prompt_length": 2048
+    },
+    "violations": {
+      "prompt_over_max_prompt_length": {
+        "count": 0,
+        "pct": 0.0,
+        "worst": []
+      },
+      "prompt_plus_chosen_over_max_length": {
+        "count": 0,
+        "pct": 0.0,
+        "worst": []
+      },
+      "prompt_plus_rejected_over_max_length": {
+        "count": 0,
+        "pct": 0.0,
+        "worst": []
+      }
+    }
+  },
+  {
+    "file": "data/processed/dpo_val.jsonl",
+    "rows": 203,
+    "prompt_tokens": {
+      "n": 203,
+      "min": 28,
+      "p50": 66,
+      "p90": 125,
+      "p95": 175,
+      "p99": 295,
+      "p99.9": 341,
+      "max": 341,
+      "mean": 78.7
+    },
+    "chosen_tokens": {
+      "n": 203,
+      "min": 7,
+      "p50": 54,
+      "p90": 123,
+      "p95": 174,
+      "p99": 293,
+      "p99.9": 380,
+      "max": 380,
+      "mean": 68.5
+    },
+    "rejected_tokens": {
+      "n": 203,
+      "min": 6,
+      "p50": 53,
+      "p90": 127,
+      "p95": 175,
+      "p99": 260,
+      "p99.9": 378,
+      "max": 378,
+      "mean": 67.6
+    },
+    "prompt+chosen": {
+      "n": 203,
+      "min": 35,
+      "p50": 121,
+      "p90": 245,
+      "p95": 352,
+      "p99": 599,
+      "p99.9": 721,
+      "max": 721,
+      "mean": 147.2
+    },
+    "prompt+rejected": {
+      "n": 203,
+      "min": 34,
+      "p50": 119,
+      "p90": 254,
+      "p95": 332,
+      "p99": 566,
+      "p99.9": 719,
+      "max": 719,
+      "mean": 146.3
+    },
+    "budgets": {
+      "max_length": 4096,
+      "max_prompt_length": 2048
+    },
+    "violations": {
+      "prompt_over_max_prompt_length": {
+        "count": 0,
+        "pct": 0.0,
+        "worst": []
+      },
+      "prompt_plus_chosen_over_max_length": {
+        "count": 0,
+        "pct": 0.0,
+        "worst": []
+      },
+      "prompt_plus_rejected_over_max_length": {
+        "count": 0,
+        "pct": 0.0,
+        "worst": []
+      }
+    }
+  }
+]
