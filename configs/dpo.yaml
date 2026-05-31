@@ -27,10 +27,11 @@ dpo:
   reference_free: false
   precompute_ref_log_probs: true   # frees ref model from GPU after first pass
   # Precompute is forward-only (no grad, no optimizer state), so memory budget
-  # is much larger than training. Use a bigger batch to cut the ~2h pass.
-  # 8 is conservative for a 4-5B model on A100 80GB; bump to 16/32 if you have
-  # headroom (watch GPU memory in `nvidia-smi`).
-  precompute_ref_batch_size: 8
+  # is much larger than training. Empirically on A100 80GB with our data
+  # (avg ~150 tokens, max ~1700), batch=32 sits around 25-50 GB; batch=8 only
+  # used ~18 GB so there was plenty of room. Drop to 16/8 if OOM hits a long
+  # tail batch, raise to 64 only after watching nvidia-smi.
+  precompute_ref_batch_size: 32
 
 train:
   output_dir: artifacts/dpo
