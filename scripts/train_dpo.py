@@ -251,10 +251,20 @@ def main() -> None:
         processing_class=tokenizer,
     )
 
-    # If we just computed the ref logps, persist the augmented datasets for reuse.
-    # TRL DPOTrainer.__init__ runs the precompute pass and stores the augmented
-    # dataset on the trainer instance, so by the time we reach here it's ready.
+    # If we just need to compute the ref logps, do it now and persist.
+    # TRL DPOTrainer triggers precompute lazily inside get_train_dataloader()
+    # / get_eval_dataloader() — NOT in __init__. So we must call those once
+    # explicitly to materialize the reference_chosen_logps and
+    # reference_rejected_logps columns on trainer.{train,eval}_dataset
+    # before save_to_disk. (Skipping this step is the bug that produced a
+    # 4-column "cache" without ref logps.)
     if not used_cache:
+        if bool(cfg["dpo"]["precompute_ref_log_probs"]):
+            print(f"[precompute] triggering ref-logp computation "
+                  f"(~2h on A100 80GB for 20k pairs)")
+            trainer.get_train_dataloader()
+            trainer.get_eval_dataloader()
+
         try:
             cache_dir.mkdir(parents=True, exist_ok=True)
             print(f"[precompute] saving augmented datasets -> {cache_dir}")
@@ -267,9 +277,19 @@ def main() -> None:
                 "max_length": cfg["model"]["max_length"],
                 "max_prompt_length": cfg["model"]["max_prompt_length"],
                 "cache_key": cache_key,
+                "train_columns": list(trainer.train_dataset.column_names),
+                "eval_columns": list(trainer.eval_dataset.column_names),
             }, ensure_ascii=False, indent=2), encoding="utf-8")
-            print(f"[precompute] cache saved; future runs with same "
-                  f"model+data will skip the precompute step")
+            # Sanity check: did we actually persist the ref-logp columns?
+            tcols = set(trainer.train_dataset.column_names)
+            need = {"reference_chosen_logps", "reference_rejected_logps"}
+            missing = need - tcols
+            if missing:
+                print(f"[precompute][WARN] cache is missing {missing}; "
+                      f"future runs will not benefit", file=sys.stderr)
+            else:
+                print(f"[precompute] cache saved with ref-logp columns; "
+                      f"future runs with same model+data skip precompute")
         except Exception as exc:
             # Caching is an optimization, never a correctness requirement.
             print(f"[precompute][WARN] failed to save cache: {exc}", file=sys.stderr)
