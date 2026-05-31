@@ -183,6 +183,12 @@ def main() -> None:
     ap.add_argument("--config", type=Path, required=True)
     ap.add_argument("--model", type=str, default=None,
                     help="override model.name_or_path")
+    ap.add_argument("--precompute-only", action="store_true",
+                    help="run reference-logp precompute and save the cache, "
+                         "then exit before trainer.train() is called. Use this "
+                         "to populate the cache ahead of time (e.g. in parallel "
+                         "with OOD eval review) so the next real training run "
+                         "starts immediately.")
     args = ap.parse_args()
 
     cfg = load_config(args.config, args.model)
@@ -267,6 +273,10 @@ def main() -> None:
         except Exception as exc:
             # Caching is an optimization, never a correctness requirement.
             print(f"[precompute][WARN] failed to save cache: {exc}", file=sys.stderr)
+
+    if args.precompute_only:
+        print(f"[precompute-only] cache populated; exiting before trainer.train()")
+        return
 
     print(f"[train] starting DPO  steps_per_epoch~={len(train_ds) // (dpo_args.per_device_train_batch_size * dpo_args.gradient_accumulation_steps)}")
     trainer.train()
