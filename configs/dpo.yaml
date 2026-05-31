@@ -90,7 +90,11 @@ eval_ood:
   vllm:
     tensor_parallel_size: 1
     dtype: bfloat16
-    gpu_memory_utilization: 0.85
+    # 0.85 was too greedy when eval_ood is invoked from inside train_dpo.py
+    # — the parent Python process still holds training tensors and CUDA
+    # context, leaving ~50 GB free instead of full 80 GB. 0.6 fits a 4-5B
+    # model + KV cache comfortably (~48 GB) even with that overhead.
+    gpu_memory_utilization: 0.6
   metrics:                    # all three computed; results logged to wandb
     - xcomet
     - BLEU

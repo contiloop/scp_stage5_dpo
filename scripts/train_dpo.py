@@ -337,6 +337,23 @@ def main() -> None:
               f"recover with: python scripts/remap_dpo_checkpoint.py "
               f"--src {final_dir} --dst {final_dir}_vllm", file=sys.stderr)
 
+    # Free training-side CUDA memory before spawning vLLM-based OOD eval.
+    # Without this the parent process still pins ~25 GB (policy model,
+    # optimizer state remnants, allocator pools), which makes vLLM's
+    # gpu_memory_utilization budget computation fail at startup.
+    try:
+        del trainer
+        del model
+    except NameError:
+        pass
+    import gc
+    gc.collect()
+    try:
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+    except Exception:
+        pass
+
     # OOD eval after training (spawn fresh process so COMET/policy model don't share state)
     ood_cfg = cfg.get("eval_ood") or {}
     if ood_cfg.get("enabled"):
