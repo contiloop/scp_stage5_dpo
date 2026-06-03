@@ -141,7 +141,7 @@ set-real-env:
 		torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 	@$(QE_VENV_DIR)/bin/pip install --no-deps transformers
 	@$(QE_VENV_DIR)/bin/pip install \
-		sentencepiece safetensors accelerate huggingface_hub \
+		sentencepiece safetensors accelerate huggingface_hub hf_transfer \
 		"unbabel-comet>=2.2.7" sacrebleu
 	@$(QE_VENV_DIR)/bin/python -c 'import torch; print("set-real-env: QE venv torch", torch.__version__, "cuda", torch.cuda.is_available())'
 	@echo "set-real-env: export COMET_PYTHON=$(QE_VENV_DIR)/bin/python"
