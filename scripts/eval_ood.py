@@ -223,13 +223,33 @@ def main() -> None:
     gen_secs = time.time() - t0
     print(f"[gen] done in {gen_secs:.1f}s")
 
+    # Per-sentence BLEU and chrF for downstream analysis (find worst rows etc.)
+    # sacrebleu.sentence_bleu / sentence_chrf give scores on a 0-100 scale.
+    import sacrebleu as _sb
+    per_bleu = []
+    per_chrf = []
+    for hyp, ref in zip(hyps, refs):
+        if not hyp:
+            per_bleu.append(None)
+            per_chrf.append(None)
+        else:
+            per_bleu.append(float(_sb.sentence_bleu(hyp, [ref]).score))
+            per_chrf.append(float(_sb.sentence_chrf(hyp, [ref]).score))
+
     preds_path = out_dir / f"ood_predictions_{args.tag}.jsonl"
     with preds_path.open("w", encoding="utf-8") as f:
-        for src, ref, hyp, tr in zip(sources, refs, hyps, truncated):
-            f.write(json.dumps({"source": src, "reference": ref,
-                                "hypothesis": hyp, "truncated": tr},
-                               ensure_ascii=False) + "\n")
-    print(f"[ood] predictions -> {preds_path}")
+        for i, (src, ref, hyp, tr) in enumerate(zip(sources, refs, hyps, truncated)):
+            f.write(json.dumps({
+                "idx": i,
+                "source": src,
+                "reference": ref,
+                "hypothesis": hyp,
+                "truncated": tr,
+                "sentence_bleu": per_bleu[i],
+                "sentence_chrf": per_chrf[i],
+                # xcomet is added by eval_ood_xcomet.py below (subprocess)
+            }, ensure_ascii=False) + "\n")
+    print(f"[ood] predictions (with per-sentence BLEU/chrF) -> {preds_path}")
 
     merged: dict[str, Any] = {
         "tag": args.tag,
