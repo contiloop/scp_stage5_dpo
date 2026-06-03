@@ -21,14 +21,12 @@ data:
   rejected_field: rejected
 
 dpo:
-  # Run 3: switch from sigmoid -> apo_zero. sigmoid showed the classic
-  # "rejected goes down, chosen barely moves" pattern (run 1/2 wandb),
-  # and OOD xcomet barely changed vs SFT. APO-Zero optimizes
-  # "increase chosen logp" and "decrease rejected logp" as separate
-  # objectives so the policy actually shifts toward chosen instead of
-  # just away from rejected. Pair with --major-only data (drop the
-  # weak-signal minor_edit pairs) for a stronger update direction.
-  loss_type: apo_zero
+  # Default: sigmoid (vanilla DPO). Switch to apo_zero for the
+  # "increase chosen logp" + "decrease rejected logp" decoupled
+  # objective (helps when sigmoid shows the "rejected down, chosen
+  # flat" pattern). Override per-run via `sed -i 's/loss_type: .../...'`
+  # before train_dpo.py, or by editing this file in a branch.
+  loss_type: sigmoid
   beta: 0.1
   label_smoothing: 0.0
   reference_free: false
