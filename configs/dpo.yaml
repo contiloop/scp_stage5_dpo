@@ -73,7 +73,11 @@ train:
   save_steps: 50
   save_total_limit: 3
   report_to: ["wandb"]
-  run_name: scp_stage5_dpo_qwen35_sft_023
+  # run_name: auto-derived at runtime from model.name_or_path basename
+  # (e.g. scp_stage5_dpo_scp_stage4_oneshot_reverse) so swapping --model
+  # gives a distinct wandb run automatically. Override via --run-name on
+  # the CLI when you want a custom label.
+  run_name_prefix: scp_stage5_dpo
 
 wandb:
   project: scp-stage5

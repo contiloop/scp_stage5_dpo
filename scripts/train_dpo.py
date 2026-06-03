@@ -184,6 +184,9 @@ def main() -> None:
     ap.add_argument("--config", type=Path, required=True)
     ap.add_argument("--model", type=str, default=None,
                     help="override model.name_or_path")
+    ap.add_argument("--run-name", type=str, default=None,
+                    help="override the wandb run name; if omitted it is "
+                         "auto-derived as <run_name_prefix>_<model_basename>.")
     ap.add_argument("--precompute-only", action="store_true",
                     help="run reference-logp precompute and save the cache, "
                          "then exit before trainer.train() is called. Use this "
@@ -193,6 +196,19 @@ def main() -> None:
     args = ap.parse_args()
 
     cfg = load_config(args.config, args.model)
+
+    # Derive wandb run name from the effective model id unless explicitly
+    # overridden. Prevents stale hardcoded names when sweeping --model.
+    t = cfg["train"]
+    if args.run_name:
+        t["run_name"] = args.run_name
+    else:
+        prefix = t.get("run_name_prefix") or t.get("run_name") or "scp_stage5_dpo"
+        model_id = cfg["model"]["name_or_path"]
+        model_slug = model_id.split("/")[-1].replace("-", "_").replace(".", "_")
+        t["run_name"] = f"{prefix}_{model_slug}"
+    t.pop("run_name_prefix", None)
+
     print(json.dumps({"effective_config": cfg}, ensure_ascii=False, indent=2))
 
     wb = cfg.get("wandb") or {}
